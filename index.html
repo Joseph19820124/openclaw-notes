@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 架构研究笔记</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        code, pre { font-family: 'JetBrains Mono', monospace; }
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .card-hover {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        .code-block {
+            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d3f 100%);
+        }
+        .diagram-box {
+            border: 2px dashed #6366f1;
+            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+        }
+        @media (prefers-color-scheme: dark) {
+            .diagram-box {
+                background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+                border-color: #818cf8;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-indigo-50 min-h-screen">
+    <!-- Hero Section -->
+    <header class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-700"></div>
+        <div class="absolute inset-0 opacity-10">
+            <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs>
+                    <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" stroke-width="0.5"/>
+                    </pattern>
+                </defs>
+                <rect width="100" height="100" fill="url(#grid)"/>
+            </svg>
+        </div>
+        <div class="relative max-w-5xl mx-auto px-6 py-20 text-center">
+            <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 mb-6">
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                <span class="text-white/90 text-sm font-medium">Architecture Deep Dive</span>
+            </div>
+            <h1 class="text-4xl md:text-6xl font-bold text-white mb-6">
+                OpenClaw 架构研究笔记
+            </h1>
+            <p class="text-xl text-indigo-100 max-w-2xl mx-auto">
+                Gateway 与 Node 分布式部署完整指南
+            </p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-5xl mx-auto px-6 py-12">
+        <!-- Key Answer Section -->
+        <section class="mb-16">
+            <div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-8 text-white shadow-xl">
+                <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold mb-2">核心问题解答</h2>
+                        <p class="text-emerald-100 text-lg mb-4">Gateway 和 Node 是否可以安装在两台不同的机器上？</p>
+                        <p class="text-xl font-semibold">答案：可以，这正是 OpenClaw 的核心设计特性之一。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Components Overview -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                </span>
+                组件概述
+            </h2>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Gateway Card -->
+                <div class="bg-white rounded-2xl p-6 shadow-lg card-hover border border-slate-100">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Gateway</h3>
+                            <p class="text-slate-500 text-sm">中央控制服务器</p>
+                        </div>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>状态管理</strong> - 存储会话、配置、凭证</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>Agent 执行</strong> - 运行 Claude agent 逻辑</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>渠道管理</strong> - Telegram, Discord, Slack 等</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>Control UI</strong> - Web 控制界面 (端口 18789)</span>
+                        </li>
+                    </ul>
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <code class="text-sm text-indigo-600 bg-indigo-50 px-2 py-1 rounded">src/gateway/</code>
+                    </div>
+                </div>
+
+                <!-- Node Card -->
+                <div class="bg-white rounded-2xl p-6 shadow-lg card-hover border border-slate-100">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Node</h3>
+                            <p class="text-slate-500 text-sm">轻量级无头客户端</p>
+                        </div>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>system.run</strong> - 执行 shell 命令</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>system.which</strong> - 定位可执行文件</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>浏览器代理</strong> - 浏览器自动化</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <svg class="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="text-slate-600"><strong>屏幕捕获</strong> - iOS/Android/macOS</span>
+                        </li>
+                    </ul>
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <code class="text-sm text-emerald-600 bg-emerald-50 px-2 py-1 rounded">src/node-host/</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Communication Diagram -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </span>
+                通信机制
+            </h2>
+
+            <div class="bg-white rounded-2xl p-8 shadow-lg border border-slate-100 mb-6">
+                <div class="grid md:grid-cols-3 gap-4 mb-6">
+                    <div class="text-center p-4 bg-indigo-50 rounded-xl">
+                        <div class="text-2xl font-bold text-indigo-600">WebSocket</div>
+                        <div class="text-slate-500 text-sm">ws:// 或 wss://</div>
+                    </div>
+                    <div class="text-center p-4 bg-purple-50 rounded-xl">
+                        <div class="text-2xl font-bold text-purple-600">Binary Frame</div>
+                        <div class="text-slate-500 text-sm">自定义协议</div>
+                    </div>
+                    <div class="text-center p-4 bg-emerald-50 rounded-xl">
+                        <div class="text-2xl font-bold text-emerald-600">Auto Reconnect</div>
+                        <div class="text-slate-500 text-sm">指数退避</div>
+                    </div>
+                </div>
+
+                <div class="diagram-box rounded-xl p-6 font-mono text-sm">
+                    <pre class="text-slate-700 dark:text-slate-300 overflow-x-auto">
+Node 机器                              Gateway 机器
+┌─────────────────┐                   ┌─────────────┐
+│ Node Host       │                   │ Gateway     │
+│ (WebSocket客户端)│                   │ (服务器)     │
+└────────┬────────┘                   └────────┬────┘
+         │                                     │
+         │  1. Node: CONNECT 消息               │
+         │  ─────────────────────────────────> │
+         │     (deviceId, nodeId, capabilities)│
+         │                                     │
+         │  2. Gateway: HELLO 响应              │
+         │  <───────────────────────────────── │
+         │                                     │
+         │  3. 心跳: PING/PONG (每30秒)         │
+         │  <─────────────────────────────────>│
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Deployment Topology -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+                    </svg>
+                </span>
+                部署拓扑：AWS EC2 + Azure VM
+            </h2>
+
+            <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl">
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- AWS EC2 -->
+                    <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-sm font-bold">
+                                AWS
+                            </div>
+                            <span class="font-semibold">EC2 (Gateway)</span>
+                        </div>
+                        <ul class="space-y-2 text-sm text-slate-300">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                                Gateway (wss://ec2-ip:18789)
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                                状态/会话存储
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                                Agent 逻辑执行
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                                消息渠道集成
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Azure VM -->
+                    <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-sm font-bold">
+                                Azure
+                            </div>
+                            <span class="font-semibold">VM (Node)</span>
+                        </div>
+                        <ul class="space-y-2 text-sm text-slate-300">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                Node Host (连接到 EC2)
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                system.run (执行命令)
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                system.which (查找程序)
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                浏览器自动化代理
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Operator -->
+                    <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <span class="font-semibold">操作员笔记本</span>
+                        </div>
+                        <ul class="space-y-2 text-sm text-slate-300">
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-purple-400 rounded-full"></span>
+                                SSH 隧道访问
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-purple-400 rounded-full"></span>
+                                或 Tailscale VPN
+                            </li>
+                            <li class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 bg-purple-400 rounded-full"></span>
+                                Control UI 管理
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Connection Lines -->
+                <div class="mt-6 flex justify-center">
+                    <div class="flex items-center gap-4 text-sm text-slate-400">
+                        <span>Azure Node</span>
+                        <div class="flex items-center gap-1">
+                            <div class="w-8 h-0.5 bg-gradient-to-r from-blue-500 to-orange-500"></div>
+                            <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                            </svg>
+                        </div>
+                        <span>WebSocket + TLS</span>
+                        <div class="flex items-center gap-1">
+                            <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                            </svg>
+                            <div class="w-8 h-0.5 bg-gradient-to-r from-orange-500 to-orange-500"></div>
+                        </div>
+                        <span>AWS Gateway</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Configuration Examples -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                </span>
+                配置示例
+            </h2>
+
+            <div class="space-y-6">
+                <!-- Gateway Config -->
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+                        <h3 class="text-white font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            AWS EC2 Gateway 配置
+                        </h3>
+                        <code class="text-indigo-200 text-sm">~/.openclaw/openclaw.json</code>
+                    </div>
+                    <div class="code-block p-6">
+                        <pre class="text-gray-300 text-sm overflow-x-auto"><code class="language-json">{
+  <span class="text-purple-400">"gateway"</span>: {
+    <span class="text-purple-400">"bind"</span>: <span class="text-green-400">"lan"</span>,           <span class="text-gray-500">// 暴露给外部连接</span>
+    <span class="text-purple-400">"port"</span>: <span class="text-orange-400">18789</span>,
+    <span class="text-purple-400">"auth"</span>: {
+      <span class="text-purple-400">"mode"</span>: <span class="text-green-400">"token"</span>,
+      <span class="text-purple-400">"token"</span>: <span class="text-green-400">"sk-your-secret-token"</span>
+    },
+    <span class="text-purple-400">"tls"</span>: {
+      <span class="text-purple-400">"enabled"</span>: <span class="text-blue-400">true</span>,
+      <span class="text-purple-400">"autoGenerate"</span>: <span class="text-blue-400">true</span>   <span class="text-gray-500">// 自动生成自签名证书</span>
+    }
+  },
+  <span class="text-purple-400">"agents"</span>: {
+    <span class="text-purple-400">"defaults"</span>: {
+      <span class="text-purple-400">"workspace"</span>: <span class="text-green-400">"/home/ubuntu/workspace"</span>
+    }
+  }
+}</code></pre>
+                    </div>
+                </div>
+
+                <!-- Node Config -->
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+                    <div class="bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-4">
+                        <h3 class="text-white font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Azure VM Node 配置
+                        </h3>
+                        <code class="text-emerald-200 text-sm">~/.openclaw/node.json</code>
+                    </div>
+                    <div class="code-block p-6">
+                        <pre class="text-gray-300 text-sm overflow-x-auto"><code class="language-json">{
+  <span class="text-purple-400">"version"</span>: <span class="text-orange-400">1</span>,
+  <span class="text-purple-400">"nodeId"</span>: <span class="text-green-400">"auto-generated-uuid"</span>,
+  <span class="text-purple-400">"token"</span>: <span class="text-green-400">"pairing-token"</span>,
+  <span class="text-purple-400">"displayName"</span>: <span class="text-green-400">"Azure VM"</span>,
+  <span class="text-purple-400">"gateway"</span>: {
+    <span class="text-purple-400">"host"</span>: <span class="text-green-400">"ec2-public-ip.amazonaws.com"</span>,
+    <span class="text-purple-400">"port"</span>: <span class="text-orange-400">18789</span>,
+    <span class="text-purple-400">"tls"</span>: <span class="text-blue-400">true</span>,
+    <span class="text-purple-400">"tlsFingerprint"</span>: <span class="text-green-400">"sha256:..."</span>
+  }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Deployment Steps -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                </span>
+                部署步骤
+            </h2>
+
+            <div class="space-y-6">
+                <!-- Step 1 -->
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-slate-100">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">1</div>
+                        <h3 class="text-xl font-bold text-slate-800">AWS EC2 设置</h3>
+                    </div>
+                    <div class="code-block rounded-xl p-4">
+                        <pre class="text-gray-300 text-sm overflow-x-auto"><code><span class="text-gray-500"># 安装 OpenClaw</span>
+<span class="text-yellow-400">sudo</span> npm install -g openclaw@latest
+
+<span class="text-gray-500"># 配置并启动 Gateway</span>
+openclaw setup
+openclaw gateway install --port <span class="text-orange-400">18789</span> --token <span class="text-green-400">"sk-your-token"</span>
+openclaw gateway start
+
+<span class="text-gray-500"># 查看状态</span>
+openclaw gateway status --deep</code></pre>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-slate-100">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">2</div>
+                        <h3 class="text-xl font-bold text-slate-800">Azure VM 设置</h3>
+                    </div>
+                    <div class="code-block rounded-xl p-4">
+                        <pre class="text-gray-300 text-sm overflow-x-auto"><code><span class="text-gray-500"># 安装 OpenClaw</span>
+<span class="text-yellow-400">sudo</span> npm install -g openclaw@latest
+
+<span class="text-gray-500"># 安装并启动 Node 服务</span>
+openclaw node install \
+  --host <span class="text-green-400">"ec2-public-ip"</span> \
+  --port <span class="text-orange-400">18789</span> \
+  --tls \
+  --token <span class="text-green-400">"sk-your-token"</span>
+
+openclaw node start
+
+<span class="text-gray-500"># 查看状态</span>
+openclaw node status</code></pre>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="bg-white rounded-2xl p-6 shadow-lg border border-slate-100">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">3</div>
+                        <h3 class="text-xl font-bold text-slate-800">批准配对（操作员机器）</h3>
+                    </div>
+                    <div class="code-block rounded-xl p-4">
+                        <pre class="text-gray-300 text-sm overflow-x-auto"><code><span class="text-gray-500"># 建立 SSH 隧道</span>
+ssh -N -L <span class="text-orange-400">18789</span>:<span class="text-orange-400">127.0.0.1</span>:<span class="text-orange-400">18789</span> ubuntu@ec2-public-ip &
+
+<span class="text-gray-500"># 查看待批准的 Node</span>
+openclaw nodes pending
+
+<span class="text-gray-500"># 批准 Azure VM 的配对请求</span>
+openclaw nodes approve <span class="text-cyan-400">&lt;request-id&gt;</span>
+
+<span class="text-gray-500"># 验证连接</span>
+openclaw nodes list</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Constraints Table -->
+        <section class="mb-16">
+            <h2 class="text-3xl font-bold text-slate-800 mb-8 flex items-center gap-3">
+                <span class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </span>
+                关键约束与注意事项
+            </h2>
+
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">约束</th>
+                            <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">说明</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-2 text-slate-800 font-medium">
+                                    <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                                    单一 Gateway
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">每个逻辑"agent 主机"只能有一个 Gateway 实例</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-2 text-slate-800 font-medium">
+                                    <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                    网络延迟
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">Node 命令有超时限制（默认 15-30秒），高延迟连接可能失败</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-2 text-slate-800 font-medium">
+                                    <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                    认证要求
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">非 loopback 的 Gateway 必须启用 token/password 认证</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-2 text-slate-800 font-medium">
+                                    <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                    状态归属
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">Gateway 拥有工作区和会话；Node 是无状态执行引擎</td>
+                        </tr>
+                        <tr>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center gap-2 text-slate-800 font-medium">
+                                    <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                                    可用性
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-slate-600">Gateway 宕机时，Node 保持注册但无法执行任务</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Conclusion -->
+        <section class="mb-16">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-8 text-white shadow-xl">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+                    </svg>
+                    结论
+                </h2>
+                <p class="text-lg text-indigo-100 mb-6">OpenClaw 的架构天然支持分布式部署：</p>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-white/10 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="font-semibold">Gateway</span>
+                        </div>
+                        <p class="text-indigo-200 text-sm">可部署在任何云服务器上（AWS、Azure、GCP）</p>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="font-semibold">Node</span>
+                        </div>
+                        <p class="text-indigo-200 text-sm">可部署在任意数量的远程机器上</p>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="font-semibold">安全通信</span>
+                        </div>
+                        <p class="text-indigo-200 text-sm">WebSocket + TLS + Token 认证</p>
+                    </div>
+                    <div class="bg-white/10 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span class="font-semibold">配置驱动</span>
+                        </div>
+                        <p class="text-indigo-200 text-sm">无需修改代码，适合多云和混合云场景</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-8">
+        <div class="max-w-5xl mx-auto px-6 text-center">
+            <p class="text-sm">OpenClaw Architecture Notes | Generated 2025</p>
+            <p class="text-xs mt-2">Built with Tailwind CSS</p>
+        </div>
+    </footer>
+</body>
+</html>
