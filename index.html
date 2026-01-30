@@ -235,6 +235,42 @@ Node 机器                              Gateway 机器
          │  <─────────────────────────────────>│
                     </pre>
                 </div>
+
+                <!-- Important Clarification -->
+                <div class="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-6 mt-6">
+                    <h4 class="font-bold text-amber-800 mb-3 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        重要说明：WebSocket vs SSH
+                    </h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-amber-200">
+                                    <th class="text-left py-2 text-amber-800">连接类型</th>
+                                    <th class="text-left py-2 text-amber-800">协议</th>
+                                    <th class="text-left py-2 text-amber-800">用途</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-amber-900">
+                                <tr class="border-b border-amber-100">
+                                    <td class="py-2 font-medium">Node → Gateway</td>
+                                    <td class="py-2"><code class="bg-amber-100 px-1 rounded">WebSocket (wss://)</code></td>
+                                    <td class="py-2">Node 与 Gateway 之间的 RPC 通信（执行命令、返回结果）</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 font-medium">操作员 → Gateway</td>
+                                    <td class="py-2"><code class="bg-amber-100 px-1 rounded">SSH 隧道（可选）</code></td>
+                                    <td class="py-2">人工操作员访问 Control UI 时的端口转发（非必需）</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-amber-700 mt-3 text-sm">
+                        <strong>注意：</strong>Node 不使用 SSH 连接 Gateway。SSH 隧道仅用于操作员远程管理，且是可选的（也可以直接暴露端口或使用 Tailscale VPN）。
+                    </p>
+                </div>
             </div>
         </section>
 
